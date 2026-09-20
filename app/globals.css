@@ -1,0 +1,19 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Work+Sans:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #f5f1e7;
+  color: #1c2733;
+}
+
+:focus-visible {
+  outline: 2px solid #a63a2e;
+  outline-offset: 2px;
+}
