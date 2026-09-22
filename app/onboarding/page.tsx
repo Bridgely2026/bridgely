@@ -11,15 +11,17 @@ const HOUSEHOLD = ["Living alone", "With a partner", "With family or kids", "Wit
 const SECTORS = ["Tech", "Healthcare", "Hospitality", "Education", "Trades", "Other"];
 // Goal is stored on the users row but not scored into computeStartingPoint()
 // — an unchanged decision from earlier, still true with this longer list.
-// Category comments are for internal reference only, never rendered.
-const GOALS = [
-  "Feel more confident in day-to-day conversations", // Broad/Everyday
-  "Excel in professional & workplace settings", // Career Focus
-  "Blend in socially and master British humor", // Social Integration
-  "Prepare for an upcoming event or relocation", // Time-Sensitive
-  "Learn indirect language, etiquette, and polite phrasing", // Nuance Focus
-  "Understand why British indirectness isn't evasion or dishonesty", // Directness Recalibration
-  "Understand something specific that confused me", // Problem-Solving
+// `label` is the short bold category tag shown above the sentence in each
+// chip (display only); `text` is the full sentence — the value actually
+// selected/stored, exactly as before this label was added.
+const GOALS: { label: string; text: string }[] = [
+  { label: "Everyday", text: "Feel more confident in day-to-day conversations" },
+  { label: "Career Focus", text: "Excel in professional & workplace settings" },
+  { label: "Social Integration", text: "Blend in socially and master British humour" },
+  { label: "Time-Sensitive", text: "Prepare for an upcoming event or relocation" },
+  { label: "Nuance Focus", text: "Learn indirect language, etiquette, and polite phrasing" },
+  { label: "Language Transition", text: "Switch from American English to British equivalents" },
+  { label: "Problem-Solving", text: "Understand something specific that confused me" },
 ];
 
 // Sector is only collected when one of these situations was picked in step 1.
@@ -377,8 +379,11 @@ export default function OnboardingPage() {
                 <legend className="text-sm font-medium text-ink">What&rsquo;s your main goal right now?</legend>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {GOALS.map((g) => (
-                    <Chip key={g} selected={goal === g} onClick={() => setGoal(g)}>
-                      {g}
+                    <Chip key={g.text} selected={goal === g.text} onClick={() => setGoal(g.text)}>
+                      <span className="block text-left">
+                        <span className="block font-semibold">{g.label}</span>
+                        <span className="mt-0.5 block font-normal">{g.text}</span>
+                      </span>
                     </Chip>
                   ))}
                 </div>
