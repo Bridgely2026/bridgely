@@ -250,6 +250,12 @@ export const CATEGORY_LABELS: Record<CategoryCode, NormEntry["category"]> = {
   AB: "Admin & bureaucracy",
 };
 
+// Reverse of CATEGORY_LABELS, for turning a category label (e.g. the
+// topCategory returned by /api/classify-struggle) back into a CategoryCode.
+const CATEGORY_CODE_BY_LABEL = Object.fromEntries(
+  (Object.entries(CATEGORY_LABELS) as [CategoryCode, string][]).map(([code, label]) => [label, code])
+) as Record<string, CategoryCode>;
+
 export const CATEGORY_BLURBS: Record<string, string> = {
   Workplace: "Meetings, managers, colleagues",
   "Housing & landlord": "Repairs, notices, flatmates",
@@ -309,7 +315,8 @@ function naturalJoin(items: string[]): string {
 export function computeStartingPoint(
   situations: string[],
   timeInUk: string,
-  role: string
+  role: string,
+  struggleCategory?: string | null
 ): { rankedCategories: string[]; summary: string } {
   const selected = SITUATIONS.filter((s) => situations.includes(s.label));
 
@@ -333,13 +340,25 @@ export function computeStartingPoint(
     if (bonus > 0) roleBoosted.add(code as CategoryCode);
   }
 
+  // Struggle-text classification (from /api/classify-struggle), same +2 tier
+  // as a role's primary bonus — added to roleBoosted so it shares that tier's
+  // tiebreak below rather than needing its own. Additive only, like every
+  // other modifier here: it can win a tie against an unselected category, but
+  // the explicitlySelected tier still outranks it, so it never lets an
+  // unselected category beat one the user actually picked in situations.
+  const struggleCode = struggleCategory ? CATEGORY_CODE_BY_LABEL[struggleCategory] : undefined;
+  if (struggleCode) {
+    scores[struggleCode] += 2;
+    roleBoosted.add(struggleCode);
+  }
+
   const explicitlySelected = new Set(selected.map((s) => s.category));
   const flag = (set: Set<CategoryCode>, code: CategoryCode) => (set.has(code) ? 1 : 0);
 
   // Ties on score resolve in three tiers: (1) an explicitly selected situation
-  // beats an unselected one, (2) a role-boosted category beats an un-boosted one,
-  // (3) otherwise the key order of `scores` (WP, HC, HL, JS, SO, AB), which the
-  // stable sort preserves.
+  // beats an unselected one, (2) a role- or struggle-boosted category beats an
+  // un-boosted one, (3) otherwise the key order of `scores` (WP, HC, HL, JS,
+  // SO, AB), which the stable sort preserves.
   const rankedCategories = (Object.keys(scores) as CategoryCode[])
     .filter((code) => scores[code] > 0)
     .sort(

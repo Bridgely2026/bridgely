@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "taxonomy:import": "node scripts/import-taxonomy.mjs",
-    "taxonomy:sync-db": "node scripts/sync-taxonomy-db.mjs"
+    "taxonomy:sync-db": "node scripts/sync-taxonomy-db.mjs",
+    "embed-category-refs": "node scripts/embed-category-references.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.126.0",

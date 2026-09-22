@@ -21,6 +21,13 @@ const SECTOR_SITUATIONS = ["Work", "Job search"];
 const TOTAL_STEPS = 3;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Floor on /api/classify-struggle's similarity score below which the result
+// is treated as no classification at all (same as a failed/null response) —
+// too low to trust as a signal into computeStartingPoint(). [struggle-classify]
+// still logs every score unconditionally server-side regardless of this floor,
+// so real usage data keeps accumulating for a future recalibration pass.
+const STRUGGLE_CATEGORY_FLOOR = 0.3;
+
 function Chip({
   selected,
   onClick,
@@ -125,9 +132,31 @@ export default function OnboardingPage() {
     if (!isLastStep || !canProceed || saving || !authChecked || submittingRef.current) return;
     submittingRef.current = true;
 
-    const computed = computeStartingPoint(situations, timeInUk, role);
     setSaving(true);
     setSaveFailed(false);
+
+    // Struggle-text classification: an extra signal into computeStartingPoint(),
+    // best-effort only. Isolated in its own try/catch so a failure here (network
+    // issue, no match, etc.) can never block or delay the actual submission below
+    // — it just falls back to computing the starting point without it.
+    let struggleCategory: string | null = null;
+    try {
+      const res = await fetch("/api/classify-struggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ struggle: struggle.trim() }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { topCategory?: string | null; similarity?: number };
+        if (data.topCategory && (data.similarity ?? 0) >= STRUGGLE_CATEGORY_FLOOR) {
+          struggleCategory = data.topCategory;
+        }
+      }
+    } catch (err) {
+      console.error("[struggle-classify] request failed:", err);
+    }
+
+    const computed = computeStartingPoint(situations, timeInUk, role, struggleCategory);
     try {
       const id = userId ?? (await ensureAnonymousUserId());
       setUserId(id);
