@@ -319,7 +319,7 @@ function PracticeContent() {
                 onClick={() => choose(i)}
                 disabled={selected !== null}
                 className={`flex w-full items-center gap-3 border p-4 text-left text-sm transition ${
-                  showState && isChosen && opt.correct
+                  showState && opt.correct
                     ? "border-sage bg-sage-light text-ink"
                     : showState && isChosen && !opt.correct
                       ? "border-brick bg-brick-light text-ink"
@@ -328,7 +328,7 @@ function PracticeContent() {
               >
                 <span
                   className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs ${
-                    showState && isChosen && opt.correct
+                    showState && opt.correct
                       ? "border-sage text-sage"
                       : showState && isChosen && !opt.correct
                         ? "border-brick text-brick"
