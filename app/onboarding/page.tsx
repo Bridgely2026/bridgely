@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
 import { ROLES, SITUATIONS, computeStartingPoint } from "@/lib/mock-data";
@@ -62,7 +62,17 @@ export default function OnboardingPage() {
   const [email, setEmail] = useState("");
 
   const [userId, setUserId] = useState<string | null>(null);
+  // True once the anonymous auth bootstrap below has settled, success or
+  // failure. Gates the final submit so it can't fire mid-bootstrap on a slow
+  // connection; on failure it still flips true so the retry-on-submit path
+  // in handleSubmit can kick in instead of leaving the form stuck.
+  const [authChecked, setAuthChecked] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Belt-and-suspenders alongside the `saving` state: a ref updates
+  // synchronously, so it closes the window where a rapid double-tap (common
+  // on laggy mobile UI) fires handleSubmit twice before React re-renders the
+  // disabled button.
+  const submittingRef = useRef(false);
   const [saveFailed, setSaveFailed] = useState(false);
   const [saved, setSaved] = useState(false);
   const [startingPoint, setStartingPoint] = useState<{ rankedCategories: string[]; summary: string } | null>(
@@ -79,6 +89,9 @@ export default function OnboardingPage() {
       .catch((err) => {
         // Not fatal: submit retries, and falls back to an unsaved profile.
         console.error("Anonymous sign-in failed:", err);
+      })
+      .finally(() => {
+        if (!cancelled) setAuthChecked(true);
       });
     return () => {
       cancelled = true;
@@ -104,7 +117,13 @@ export default function OnboardingPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!isLastStep || !canProceed || saving) return;
+    // authChecked guards against the upsert firing while the anonymous
+    // session bootstrap (see effect above) is still in flight — plausible on
+    // a slow mobile connection, where the network round trip for
+    // signInAnonymously can still be pending by the time someone reaches the
+    // last step.
+    if (!isLastStep || !canProceed || saving || !authChecked || submittingRef.current) return;
+    submittingRef.current = true;
 
     const computed = computeStartingPoint(situations, timeInUk, role);
     setSaving(true);
@@ -138,10 +157,14 @@ export default function OnboardingPage() {
       setSaved(true);
       setStartingPoint(computed);
     } catch (err) {
-      console.error("Failed to save onboarding profile:", err);
+      // Full Supabase error (code/message/details), not just the generic
+      // message shown to the user below — needed to diagnose failures like
+      // the slow-mobile-connection reports.
+      console.error("[onboarding-upsert-failed]", err);
       setSaveFailed(true);
     } finally {
       setSaving(false);
+      submittingRef.current = false;
     }
   }
 
@@ -378,10 +401,10 @@ export default function OnboardingPage() {
             {isLastStep ? (
               <button
                 type="submit"
-                disabled={!canProceed || saving}
+                disabled={!canProceed || saving || !authChecked}
                 className="bg-brick px-6 py-3 text-sm font-medium text-paper transition hover:bg-brick-dark disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {saving ? "Saving…" : saveFailed ? "Try again" : "See my starting point"}
+                {!authChecked ? "Preparing…" : saving ? "Saving…" : saveFailed ? "Try again" : "See my starting point"}
               </button>
             ) : (
               <button
