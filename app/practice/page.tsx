@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import CategoryIcon from "@/components/CategoryIcon";
-import { CATEGORY_BLURBS, getCategoryScenarioCounts, getScenariosByCategory } from "@/lib/mock-data";
+import { CATEGORY_BLURBS, getCategoryScenarioCounts, getScenariosByCategory, type ScenarioStep } from "@/lib/mock-data";
 import { getStreak, incrementStreak } from "@/lib/streak";
 
 type View = "picker" | "session" | "recap";
@@ -16,6 +16,18 @@ function pickCategoryWithScenarios(rankedCategories: string[]): string | null {
   return null;
 }
 
+// Every scenario in lib/mock-data.ts currently has its correct answer stored
+// at the same position, so it's shuffled here at render time (not in the
+// stored content) each time a scenario is presented. Fisher-Yates.
+function shuffle<T>(items: T[]): T[] {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
 function PracticeContent() {
   const searchParams = useSearchParams();
   const categoriesParam = searchParams.get("categories");
@@ -23,6 +35,7 @@ function PracticeContent() {
 
   const initialCategory = pickCategoryWithScenarios(rankedCategories);
   const initialNoteCategory = rankedCategories.length > 0 && !initialCategory ? rankedCategories[0] : null;
+  const initialScenario = initialCategory ? getScenariosByCategory(initialCategory)[0] : undefined;
 
   const [view, setView] = useState<View>(initialCategory ? "session" : "picker");
   const [activeCategory, setActiveCategory] = useState<string | null>(initialCategory);
@@ -32,6 +45,14 @@ function PracticeContent() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
+  // The options actually rendered/answered against — a shuffled copy of the
+  // current scenario's options, re-shuffled at each transition into a new
+  // question (see startSession/goToNextOrRecap below) rather than derived
+  // reactively, since revisiting the same (possibly single-question) category
+  // can land on the same scenario object without any dependency changing.
+  const [shuffledOptions, setShuffledOptions] = useState<ScenarioStep["options"]>(() =>
+    initialScenario ? shuffle(initialScenario.steps[0].options) : []
+  );
   const [lastAnswer, setLastAnswer] = useState<{ correct: boolean; feedback: string; normId: string } | null>(
     null
   );
@@ -68,6 +89,20 @@ function PracticeContent() {
     return () => observer.disconnect();
   }, [lastAnswer !== null]);
 
+  // The paddingBottom above only helps once the page is actually scrolled —
+  // nothing scrolled it there on its own, so right after answering, the bar
+  // can still cover whatever option currently sits in that screen region
+  // until the user discovers they should scroll. Auto-scroll to the bottom
+  // instead: fires once when a new answer lands (using whatever padding is
+  // current, possibly the pre-measurement fallback) and again when
+  // feedbackBarHeight updates to the real value shortly after — the second
+  // call retargets the same in-flight smooth scroll to the corrected
+  // position, so it self-corrects rather than needing exact ordering.
+  useEffect(() => {
+    if (!lastAnswer) return;
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  }, [lastAnswer, feedbackBarHeight]);
+
   const categoryCounts = getCategoryScenarioCounts();
   const categoryScenarios = activeCategory ? getScenariosByCategory(activeCategory) : [];
   const scenario = categoryScenarios[currentIndex];
@@ -82,11 +117,14 @@ function PracticeContent() {
     setBarVisible(false);
     setNoteCategory(null);
     setView("session");
+    const firstScenario = getScenariosByCategory(category)[0];
+    setShuffledOptions(firstScenario ? shuffle(firstScenario.steps[0].options) : []);
   }
 
   function choose(i: number) {
     if (selected !== null || !step || !scenario) return;
-    const opt = step.options[i];
+    const opt = shuffledOptions[i];
+    if (!opt) return;
     setSelected(i);
     if (opt.correct) setCorrectCount((c) => c + 1);
     setLastAnswer({ correct: opt.correct, feedback: opt.feedback, normId: scenario.normId });
@@ -96,6 +134,8 @@ function PracticeContent() {
   function goToNextOrRecap() {
     setBarVisible(false);
     if (currentIndex + 1 < categoryScenarios.length) {
+      const nextScenario = categoryScenarios[currentIndex + 1];
+      setShuffledOptions(shuffle(nextScenario.steps[0].options));
       setCurrentIndex((i) => i + 1);
       setSelected(null);
     } else {
@@ -270,7 +310,7 @@ function PracticeContent() {
         <p className="mt-4 font-display text-lg italic text-ink">{step.prompt}</p>
 
         <div className="mt-6 space-y-3">
-          {step.options.map((opt, i) => {
+          {shuffledOptions.map((opt, i) => {
             const isChosen = selected === i;
             const showState = selected !== null;
             return (
@@ -282,7 +322,7 @@ function PracticeContent() {
                   showState && isChosen && opt.correct
                     ? "border-sage bg-sage-light text-ink"
                     : showState && isChosen && !opt.correct
-                      ? "border-brick bg-brick/10 text-ink"
+                      ? "border-brick bg-brick-light text-ink"
                       : "border-line bg-white text-ink hover:border-ink disabled:hover:border-line"
                 }`}
               >
@@ -309,7 +349,7 @@ function PracticeContent() {
           ref={feedbackBarRef}
           className={`fixed inset-x-0 bottom-0 border-t transition-transform duration-300 ease-out ${
             barVisible ? "" : "translate-y-full"
-          } ${lastAnswer.correct ? "border-sage bg-sage-light" : "border-brick bg-brick/10"}`}
+          } ${lastAnswer.correct ? "border-sage bg-sage-light" : "border-brick bg-brick-light"}`}
         >
           <div className="mx-auto flex max-w-2xl items-start gap-4 px-6 py-5">
             <span

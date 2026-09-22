@@ -9,6 +9,7 @@ const config: Config = {
         ink: "#1C2733",
         brick: "#A63A2E",
         "brick-dark": "#8A2F25",
+        "brick-light": "#F0DAD5",
         sage: "#4B6C5E",
         "sage-light": "#DCE5DF",
         muted: "#5B6670",
