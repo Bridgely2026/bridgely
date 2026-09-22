@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Nav from "@/components/Nav";
 import CategoryIcon from "@/components/CategoryIcon";
@@ -37,10 +37,36 @@ function PracticeContent() {
   );
   const [barVisible, setBarVisible] = useState(false);
 
+  // The feedback bar is `fixed inset-x-0 bottom-0`, so it's out of document
+  // flow and can overlap the last option on narrow viewports unless the
+  // scrollable content above reserves space for it. Its height varies with
+  // feedback text length (longer explanations wrap to more lines on a narrow
+  // phone), so it's measured via ResizeObserver rather than guessed as a
+  // single fixed value — see feedbackBarHeight usage below.
+  const feedbackBarRef = useRef<HTMLDivElement>(null);
+  const [feedbackBarHeight, setFeedbackBarHeight] = useState(0);
+
   const [streak, setStreak] = useState(0);
   useEffect(() => {
     setStreak(getStreak());
   }, []);
+
+  // Attaches once per session as soon as the bar first mounts (lastAnswer
+  // goes null -> set on the first answered question) and stays attached for
+  // the rest of the session, since the bar's DOM node persists across
+  // questions (only its content/visibility change) — so this alone also
+  // catches height changes from viewport resize or text rewrap, not just the
+  // initial measurement.
+  useEffect(() => {
+    const el = feedbackBarRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) setFeedbackBarHeight(entry.contentRect.height);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [lastAnswer !== null]);
 
   const categoryCounts = getCategoryScenarioCounts();
   const categoryScenarios = activeCategory ? getScenariosByCategory(activeCategory) : [];
@@ -231,7 +257,15 @@ function PracticeContent() {
 
       <h1 className="mt-4 font-display text-2xl font-medium text-ink">{scenario.title}</h1>
 
-      <div className="mt-8 border border-line bg-white/60 p-6 pb-28">
+      <div
+        className="mt-8 border border-line bg-white/60 p-6"
+        // Reserves room for the fixed feedback bar below once it's shown, so
+        // the last option never ends up hidden behind it — see
+        // feedbackBarHeight's ResizeObserver setup above. 112px matches the
+        // bar's typical single-line height as a fallback before the first
+        // measurement resolves; +24 is breathing room above the bar itself.
+        style={lastAnswer ? { paddingBottom: (feedbackBarHeight > 0 ? feedbackBarHeight + 24 : 112) + "px" } : undefined}
+      >
         <p className="text-sm leading-relaxed text-muted">{scenario.setup}</p>
         <p className="mt-4 font-display text-lg italic text-ink">{step.prompt}</p>
 
@@ -272,6 +306,7 @@ function PracticeContent() {
 
       {lastAnswer && (
         <div
+          ref={feedbackBarRef}
           className={`fixed inset-x-0 bottom-0 border-t transition-transform duration-300 ease-out ${
             barVisible ? "" : "translate-y-full"
           } ${lastAnswer.correct ? "border-sage bg-sage-light" : "border-brick bg-brick/10"}`}
