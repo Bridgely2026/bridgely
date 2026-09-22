@@ -9,10 +9,17 @@ import { ensureAnonymousUserId, getSupabaseBrowser } from "@/lib/supabase-browse
 const TIME_IN_UK = ["Just arrived", "Under 1 year", "1–3 years", "3+ years"];
 const HOUSEHOLD = ["Living alone", "With a partner", "With family or kids", "With flatmates or housemates"];
 const SECTORS = ["Tech", "Healthcare", "Hospitality", "Education", "Trades", "Other"];
+// Goal is stored on the users row but not scored into computeStartingPoint()
+// — an unchanged decision from earlier, still true with this longer list.
+// Category comments are for internal reference only, never rendered.
 const GOALS = [
-  "Feel more confident day to day",
-  "Prepare for something specific coming up",
-  "Understand something that already confused me",
+  "Feel more confident in day-to-day conversations", // Broad/Everyday
+  "Excel in professional & workplace settings", // Career Focus
+  "Blend in socially and master British humor", // Social Integration
+  "Prepare for an upcoming event or relocation", // Time-Sensitive
+  "Learn indirect language, etiquette, and polite phrasing", // Nuance Focus
+  "Understand why British indirectness isn't evasion or dishonesty", // Directness Recalibration
+  "Understand something specific that confused me", // Problem-Solving
 ];
 
 // Sector is only collected when one of these situations was picked in step 1.
